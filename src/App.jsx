@@ -13,6 +13,8 @@ function App() {
   const [tonweb, setTonweb] = useState(null);
   const [keypairs, setKeypairs] = useState([]);
   const [showPassphraseIndex, setShowPassphraseIndex] = useState(null);
+  const [balances, setBalances] = useState({});
+  const [refreshingBalances, setRefreshingBalances] = useState(false);
 
   // Transfer-related states
   const [toAddress, setToAddress] = useState('');
@@ -54,19 +56,60 @@ function App() {
     }
   };
 
+  // Get balance for a specific address
+  const getBalance = async (address) => {
+    if (!tonweb) return;
+    try {
+      const balance = await tonweb.getBalance(address);
+      return TonWeb.utils.fromNano(balance);
+    } catch (error) {
+      console.error('Error getting balance:', error);
+      return '0';
+    }
+  };
+
+  // Refresh balances for all addresses
+  const refreshBalances = async () => {
+    if (!tonweb || refreshingBalances) return;
+    
+    setRefreshingBalances(true);
+    try {
+      const newBalances = {};
+      for (const keypair of keypairs) {
+        newBalances[keypair.address] = await getBalance(keypair.address);
+      }
+      setBalances(newBalances);
+    } catch (error) {
+      console.error('Error refreshing balances:', error);
+    } finally {
+      setRefreshingBalances(false);
+    }
+  };
+
   // Load existing keypairs from localStorage on mount
   useEffect(() => {
     const storedKeypairs = localStorage.getItem('wallet_keypairs');
     if (storedKeypairs) {
-      setKeypairs(JSON.parse(storedKeypairs));
+      const parsedKeypairs = JSON.parse(storedKeypairs);
+      setKeypairs(parsedKeypairs);
     }
 
     const storedMnemonic = localStorage.getItem('wallet_mnemonic');
     if (storedMnemonic) {
       setMnemonic(storedMnemonic);
-      initializeWallet(storedMnemonic);
+      initializeWallet(storedMnemonic).then(() => {
+        // Refresh balances after wallet is initialized
+        refreshBalances();
+      });
     }
   }, []);
+
+  // Auto-refresh balances when keypairs change
+  useEffect(() => {
+    if (tonweb && keypairs.length > 0) {
+      refreshBalances();
+    }
+  }, [keypairs, tonweb]);
 
   // Generate new keypair
   const handleGenerateKeypair = async () => {
@@ -251,47 +294,59 @@ function App() {
 
       {/* Saved TON Wallet Addresses */}
       <div style={{ marginBottom: '20px' }}>
-        <h2>3. Saved TON Wallet Address</h2>
-        <div style={{ marginBottom: '10px' }}>
-          <button 
-            onClick={handleGenerateKeypair}
-            style={{ 
-              padding: '10px 20px',
-              fontSize: '16px',
-              marginBottom: '10px',
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+          <h2>3. Saved TON Wallet Address</h2>
+          <button
+            onClick={refreshBalances}
+            disabled={refreshingBalances}
+            style={{
+              padding: '8px 16px',
+              fontSize: '14px',
               background: '#4CAF50',
               color: 'white',
               border: 'none',
               borderRadius: '4px',
-              cursor: 'pointer'
+              cursor: refreshingBalances ? 'not-allowed' : 'pointer',
+              opacity: refreshingBalances ? 0.7 : 1
             }}
           >
-            Generate New Address
+            {refreshingBalances ? 'Refreshing...' : 'Refresh Balances'}
           </button>
         </div>
-        {keypairs.map((keypair, index) => (
-          <div key={index} style={{ 
-            border: '1px solid #555',
-            padding: '15px',
+        <button
+          onClick={handleGenerateKeypair}
+          style={{
+            padding: '10px 20px',
+            fontSize: '16px',
             marginBottom: '10px',
+            background: '#4CAF50',
+            color: 'white',
+            border: 'none',
             borderRadius: '4px',
-            background: '#444'
-          }}>
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
+            cursor: 'pointer'
+          }}
+        >
+          Generate New Address
+        </button>
+        {keypairs.map((keypair, index) => (
+          <div
+            key={keypair.address}
+            style={{
+              background: '#444',
+              padding: '15px',
+              borderRadius: '4px',
               marginBottom: '10px'
-            }}>
-              <div style={{ fontFamily: 'monospace', wordBreak: 'break-all', flex: 1 }}>
-                {keypair.address}
-              </div>
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <code style={{ wordBreak: 'break-all' }}>{keypair.address}</code>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button
                   onClick={() => handleCopyAddress(keypair.address)}
-                  style={{ 
+                  style={{
                     padding: '8px 16px',
-                    background: '#2196F3',
+                    fontSize: '14px',
+                    background: '#666',
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
@@ -302,31 +357,30 @@ function App() {
                 </button>
                 <button
                   onClick={() => togglePassphrase(index)}
-                  style={{ 
+                  style={{
                     padding: '8px 16px',
-                    background: '#607D8B',
+                    fontSize: '14px',
+                    background: '#666',
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
                     cursor: 'pointer'
                   }}
                 >
-                  {showPassphraseIndex === index ? 'Hide' : 'Show'} Passphrase
+                  {showPassphraseIndex === index ? 'Hide Passphrase' : 'Show Passphrase'}
                 </button>
               </div>
             </div>
-            {showPassphraseIndex === index && (
-              <div style={{ 
-                marginTop: '10px',
-                padding: '8px',
-                background: '#555',
-                fontFamily: 'monospace',
-                borderRadius: '4px',
-                wordBreak: 'break-all'
-              }}>
-                {keypair.mnemonic}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ color: '#4CAF50', fontWeight: 'bold' }}>
+                Balance: {balances[keypair.address] || '0'} TON
               </div>
-            )}
+              {showPassphraseIndex === index && (
+                <div style={{ marginTop: '10px', color: '#aaa' }}>
+                  Passphrase: {keypair.mnemonic}
+                </div>
+              )}
+            </div>
           </div>
         ))}
       </div>
