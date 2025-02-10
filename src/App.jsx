@@ -295,21 +295,6 @@ function App() {
             {refreshingBalances ? 'Refreshing...' : 'Refresh Balances'}
           </button>
         </div>
-        <button
-          onClick={handleGenerateKeypair}
-          style={{
-            padding: '10px 20px',
-            fontSize: '16px',
-            marginBottom: '10px',
-            background: '#4CAF50',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Generate New Address
-        </button>
         {keypairs.map((keypair, index) => (
           <div
             key={keypair.address}
