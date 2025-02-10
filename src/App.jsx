@@ -19,6 +19,10 @@ function App() {
   const [amount, setAmount] = useState('');
   const [transferStatus, setTransferStatus] = useState('');
 
+  // Faucet-related state
+  const [faucetAddress, setFaucetAddress] = useState('');
+  const [faucetStatus, setFaucetStatus] = useState('');
+
   // Initialize wallet from mnemonic
   const initializeWallet = async (mnemonic) => {
     try {
@@ -126,6 +130,41 @@ function App() {
     }
   };
 
+  // Request TON from faucet
+  const requestFaucet = async (e) => {
+    e.preventDefault();
+    if (!faucetAddress) {
+      alert('Please enter a wallet address.');
+      return;
+    }
+
+    setFaucetStatus('Requesting TON from faucet...');
+    try {
+      const response = await fetch('https://testnet.toncenter.com/api/v2/get_grams_from_giver', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ address: faucetAddress })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to request from faucet');
+      }
+
+      const data = await response.json();
+      if (data.ok) {
+        setFaucetStatus('Successfully requested TON from faucet! It may take a few minutes to arrive.');
+        setFaucetAddress(''); // Clear the input after successful request
+      } else {
+        setFaucetStatus('Failed to request TON. Please try again later.');
+      }
+    } catch (error) {
+      console.error('Faucet request error:', error);
+      setFaucetStatus('Failed to request TON. Please try again later.');
+    }
+  };
+
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial', color: 'white', background: '#333' }}>
       <h1>Minimal TON Wallet</h1>
@@ -160,9 +199,59 @@ function App() {
         </p>
       </div>
 
+      {/* Faucet Request Section */}
+      <div style={{ marginBottom: '20px' }}>
+        <h2>2. Request Test TON</h2>
+        <p style={{ fontSize: '14px', marginBottom: '10px' }}>
+          Request test TON for any wallet address. This only works on testnet.
+        </p>
+        <form onSubmit={requestFaucet} style={{ marginBottom: '10px' }}>
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+            <input
+              type="text"
+              value={faucetAddress}
+              onChange={(e) => setFaucetAddress(e.target.value)}
+              placeholder="Enter TON wallet address"
+              style={{
+                flex: 1,
+                padding: '8px',
+                fontSize: '16px',
+                borderRadius: '4px',
+                border: '1px solid #555',
+                background: '#444',
+                color: 'white'
+              }}
+            />
+            <button
+              type="submit"
+              style={{ 
+                padding: '8px 16px',
+                background: '#4CAF50',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Request TON
+            </button>
+          </div>
+        </form>
+        {faucetStatus && (
+          <p style={{ 
+            padding: '10px', 
+            marginTop: '10px',
+            background: '#444',
+            borderRadius: '4px'
+          }}>
+            {faucetStatus}
+          </p>
+        )}
+      </div>
+
       {/* Saved TON Wallet Addresses */}
       <div style={{ marginBottom: '20px' }}>
-        <h2>2. Saved TON Wallet Address</h2>
+        <h2>3. Saved TON Wallet Address</h2>
         <div style={{ marginBottom: '10px' }}>
           <button 
             onClick={handleGenerateKeypair}
@@ -244,7 +333,7 @@ function App() {
 
       {/* Transfer Section */}
       <div style={{ marginBottom: '20px' }}>
-        <h2>3. Transfer from This Wallet</h2>
+        <h2>4. Transfer from This Wallet</h2>
         <div style={{ marginBottom: '15px' }}>
           <label style={{ display: 'block', marginBottom: '5px' }}>
             Recipient Address:
