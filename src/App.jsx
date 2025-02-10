@@ -18,46 +18,56 @@ function App() {
   const [amount, setAmount] = useState('');
   const [transferStatus, setTransferStatus] = useState('');
 
-  // On first mount, generate mnemonic and wallet
+  // Initialize wallet from mnemonic
+  const initializeWallet = async (mnemonic) => {
+    try {
+      // 2) Convert mnemonic to seed
+      const seed = await bip39.mnemonicToSeed(mnemonic);
+
+      // 3) Get first 32 bytes for key derivation
+      const seedBytes = new Uint8Array(seed).slice(0, 32);
+
+      // 4) Derive keyPair using TonWeb utility
+      const derivedKeyPair = TonWeb.utils.keyPairFromSeed(seedBytes);
+      setKeyPair(derivedKeyPair);
+
+      // 5) Create tonweb instance pointing to testnet
+      const tw = new TonWeb(
+        new TonWeb.HttpProvider('https://testnet.toncenter.com/api/v2/jsonRPC')
+      );
+      setTonweb(tw);
+
+      // 6) Create wallet class (v3R2) with derived publicKey
+      const WalletClass = tw.wallet.all.v3R2;
+      const wallet = new WalletClass(tw.provider, {
+        publicKey: derivedKeyPair.publicKey,
+        wc: 0
+      });
+
+      // 7) Fetch the wallet address
+      const address = await wallet.getAddress();
+      setWalletAddress(address.toString(true, true, true));
+    } catch (error) {
+      console.error('Error initializing wallet:', error);
+    }
+  };
+
+  // On first mount, load mnemonic from localStorage if exists
   useEffect(() => {
-    (async () => {
-      try {
-        // 1) Generate mnemonic
-        const generatedMnemonic = bip39.generateMnemonic();
-        setMnemonic(generatedMnemonic);
-
-        // 2) Convert mnemonic to seed
-        const seed = await bip39.mnemonicToSeed(generatedMnemonic);
-
-        // 3) Get first 32 bytes for key derivation
-        const seedBytes = new Uint8Array(seed).slice(0, 32);
-
-        // 4) Derive keyPair using TonWeb utility
-        const derivedKeyPair = TonWeb.utils.keyPairFromSeed(seedBytes);
-        setKeyPair(derivedKeyPair);
-
-        // 5) Create tonweb instance pointing to testnet
-        const tw = new TonWeb(
-          new TonWeb.HttpProvider('https://testnet.toncenter.com/api/v2/jsonRPC')
-        );
-        setTonweb(tw);
-
-        // 6) Create wallet class (v3R2) with derived publicKey
-        const WalletClass = tw.wallet.all.v3R2;
-        const wallet = new WalletClass(tw.provider, {
-          publicKey: derivedKeyPair.publicKey,
-          wc: 0
-        });
-
-        // 7) Fetch the wallet address
-        const address = await wallet.getAddress();
-        setWalletAddress(address.toString(true, true, true));
-
-      } catch (error) {
-        console.error('Error initializing wallet:', error);
-      }
-    })();
+    const storedMnemonic = localStorage.getItem('wallet_mnemonic');
+    if (storedMnemonic) {
+      setMnemonic(storedMnemonic);
+      initializeWallet(storedMnemonic);
+    }
   }, []);
+
+  // Generate new mnemonic and initialize wallet
+  const handleGenerateMnemonic = async () => {
+    const generatedMnemonic = bip39.generateMnemonic();
+    setMnemonic(generatedMnemonic);
+    localStorage.setItem('wallet_mnemonic', generatedMnemonic);
+    await initializeWallet(generatedMnemonic);
+  };
 
   // Copy address to clipboard
   const handleCopyAddress = () => {
@@ -115,9 +125,22 @@ function App() {
       {/* Mnemonic Display */}
       <div style={{ marginBottom: '20px' }}>
         <h2>1. Your Mnemonic (Seed Phrase)</h2>
-        <p style={{ background: '#eee', padding: '8px' }}>
-          {mnemonic || 'Generating...'}
-        </p>
+        {mnemonic ? (
+          <p style={{ background: '#eee', padding: '8px' }}>
+            {mnemonic}
+          </p>
+        ) : (
+          <button 
+            onClick={handleGenerateMnemonic}
+            style={{ 
+              padding: '10px 20px',
+              fontSize: '16px',
+              marginBottom: '10px'
+            }}
+          >
+            Generate New Wallet
+          </button>
+        )}
         <p style={{ fontSize: '14px', color: 'red' }}>
           ** Store this somewhere safe! In a real app, do NOT show it in plain text. **
         </p>
