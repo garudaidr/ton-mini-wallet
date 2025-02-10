@@ -18,6 +18,7 @@ function App() {
 
   // Transfer-related states
   const [toAddress, setToAddress] = useState('');
+  const [fromAddress, setFromAddress] = useState('');
   const [amount, setAmount] = useState('');
   const [transferStatus, setTransferStatus] = useState('');
 
@@ -138,17 +139,29 @@ function App() {
 
   // Perform a transfer from this wallet to another address
   const handleTransfer = async () => {
-    if (!tonweb || !keyPair || !keypairs[0] || !toAddress || !amount) {
+    if (!tonweb || !fromAddress || !toAddress || !amount) {
       alert('Missing required data for transfer.');
+      return;
+    }
+
+    // Find the selected wallet's data
+    const selectedWallet = keypairs.find(kp => kp.address === fromAddress);
+    if (!selectedWallet) {
+      alert('Selected wallet not found.');
       return;
     }
 
     try {
       setTransferStatus('Transferring... Please wait.');
 
+      // Initialize the wallet with the selected mnemonic
+      const seed = await bip39.mnemonicToSeed(selectedWallet.mnemonic);
+      const seedBytes = new Uint8Array(seed).slice(0, 32);
+      const selectedKeyPair = TonWeb.utils.keyPairFromSeed(seedBytes);
+
       const WalletClass = tonweb.wallet.all.v3R2;
       const wallet = new WalletClass(tonweb.provider, {
-        publicKey: keyPair.publicKey,
+        publicKey: selectedKeyPair.publicKey,
         wc: 0
       });
 
@@ -157,7 +170,7 @@ function App() {
 
       await wallet.methods
         .transfer({
-          secretKey: keyPair.secretKey,
+          secretKey: selectedKeyPair.secretKey,
           toAddress: toAddress,
           amount: nanoAmount,
           seqno: seqno,
@@ -166,7 +179,10 @@ function App() {
         })
         .send();
 
-      setTransferStatus(`Transfer successful! Sent ${amount} TON to ${toAddress}`);
+      setTransferStatus(`Transfer successful! Sent ${amount} TON from ${fromAddress} to ${toAddress}`);
+      
+      // Refresh balances after transfer
+      setTimeout(refreshBalances, 5000);
     } catch (error) {
       console.error('Transfer error:', error);
       setTransferStatus('Transfer failed. Check console for details.');
@@ -355,6 +371,31 @@ function App() {
       {/* Transfer Section */}
       <div style={{ marginBottom: '20px' }}>
         <h2>4. Transfer from This Wallet</h2>
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'block', marginBottom: '5px' }}>
+            From Address:
+            <select
+              value={fromAddress}
+              onChange={(e) => setFromAddress(e.target.value)}
+              style={{ 
+                width: '100%', 
+                margin: '5px 0',
+                padding: '8px',
+                background: '#444',
+                border: '1px solid #555',
+                borderRadius: '4px',
+                color: 'white'
+              }}
+            >
+              <option value="">Select wallet address</option>
+              {keypairs.map((keypair) => (
+                <option key={keypair.address} value={keypair.address}>
+                  {keypair.address} ({balances[keypair.address] || '0'} TON)
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div style={{ marginBottom: '15px' }}>
           <label style={{ display: 'block', marginBottom: '5px' }}>
             Recipient Address:
