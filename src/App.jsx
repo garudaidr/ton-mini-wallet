@@ -183,28 +183,28 @@ function App() {
 
     setFaucetStatus('Requesting TON from faucet...');
     try {
-      const response = await fetch('https://testnet.toncenter.com/api/v2/get_grams_from_giver', {
+      const response = await fetch('https://tonhubapi.com/faucet/api/v1/send', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
-        body: JSON.stringify({ address: faucetAddress })
+        body: JSON.stringify({ 
+          address: faucetAddress
+        })
       });
 
       if (!response.ok) {
-        throw new Error('Failed to request from faucet');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to request from faucet');
       }
 
       const data = await response.json();
-      if (data.ok) {
-        setFaucetStatus('Successfully requested TON from faucet! It may take a few minutes to arrive.');
-        setFaucetAddress(''); // Clear the input after successful request
-      } else {
-        setFaucetStatus('Failed to request TON. Please try again later.');
-      }
+      setFaucetStatus('Successfully requested TON from faucet! It may take a few minutes to arrive.');
+      setFaucetAddress(''); // Clear the input after successful request
     } catch (error) {
       console.error('Faucet request error:', error);
-      setFaucetStatus('Failed to request TON. Please try again later.');
+      setFaucetStatus(`Failed to request TON: ${error.message}`);
     }
   };
 
@@ -245,51 +245,33 @@ function App() {
       {/* Faucet Request Section */}
       <div style={{ marginBottom: '20px' }}>
         <h2>2. Request Test TON</h2>
-        <p style={{ fontSize: '14px', marginBottom: '10px' }}>
-          Request test TON for any wallet address. This only works on testnet.
+        <p style={{ fontSize: '14px', marginBottom: '10px', color: '#4CAF50' }}>
+          To get test TON tokens, please use the official TON Testnet Faucet Bot on Telegram:
         </p>
-        <form onSubmit={requestFaucet} style={{ marginBottom: '10px' }}>
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-            <input
-              type="text"
-              value={faucetAddress}
-              onChange={(e) => setFaucetAddress(e.target.value)}
-              placeholder="Enter TON wallet address"
-              style={{
-                flex: 1,
-                padding: '8px',
-                fontSize: '16px',
-                borderRadius: '4px',
-                border: '1px solid #555',
-                background: '#444',
-                color: 'white'
-              }}
-            />
-            <button
-              type="submit"
-              style={{ 
-                padding: '8px 16px',
-                background: '#4CAF50',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              Request TON
-            </button>
-          </div>
-        </form>
-        {faucetStatus && (
-          <p style={{ 
-            padding: '10px', 
-            marginTop: '10px',
-            background: '#444',
-            borderRadius: '4px'
-          }}>
-            {faucetStatus}
-          </p>
-        )}
+        <ol style={{ fontSize: '14px', marginBottom: '10px', paddingLeft: '20px' }}>
+          <li>Open Telegram and search for @testgiver_ton_bot</li>
+          <li>Start a chat with the bot</li>
+          <li>Send your wallet address to receive test TON tokens</li>
+        </ol>
+        <a 
+          href="https://t.me/testgiver_ton_bot" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          style={{ 
+            display: 'inline-block',
+            padding: '10px 20px',
+            background: '#4CAF50',
+            color: 'white',
+            textDecoration: 'none',
+            borderRadius: '4px',
+            marginTop: '10px'
+          }}
+        >
+          Open Telegram Bot
+        </a>
+        <p style={{ fontSize: '12px', marginTop: '10px', color: '#aaa' }}>
+          Note: This is the official way to get testnet TON tokens. The bot may have rate limits and distribution rules.
+        </p>
       </div>
 
       {/* Saved TON Wallet Addresses */}
