@@ -10,7 +10,6 @@ function App() {
   // State for mnemonic, keys, wallet, etc.
   const [mnemonic, setMnemonic] = useState('');
   const [keyPair, setKeyPair] = useState(null);
-  const [walletAddress, setWalletAddress] = useState('');
   const [tonweb, setTonweb] = useState(null);
   const [keypairs, setKeypairs] = useState([]);
   const [showPassphraseIndex, setShowPassphraseIndex] = useState(null);
@@ -40,7 +39,6 @@ function App() {
       });
 
       const address = await wallet.getAddress();
-      setWalletAddress(address.toString(true, true, true));
       
       return {
         mnemonic,
@@ -86,15 +84,14 @@ function App() {
   };
 
   // Copy address to clipboard
-  const handleCopyAddress = () => {
-    if (!walletAddress) return;
-    navigator.clipboard.writeText(walletAddress);
+  const handleCopyAddress = (address) => {
+    navigator.clipboard.writeText(address);
     alert('Address copied to clipboard!');
   };
 
   // Perform a transfer from this wallet to another address
   const handleTransfer = async () => {
-    if (!tonweb || !keyPair || !walletAddress || !toAddress || !amount) {
+    if (!tonweb || !keyPair || !keypairs[0] || !toAddress || !amount) {
       alert('Missing required data for transfer.');
       return;
     }
@@ -163,32 +160,26 @@ function App() {
         </p>
       </div>
 
-      {/* Wallet Address Display & Copy */}
+      {/* Saved TON Wallet Addresses */}
       <div style={{ marginBottom: '20px' }}>
-        <h2>2. Your TON Wallet Address</h2>
-        <p style={{ background: '#444', padding: '8px', borderRadius: '4px', fontFamily: 'monospace' }}>
-          {walletAddress || 'Loading address...'}
-        </p>
-        <button 
-          onClick={handleCopyAddress} 
-          disabled={!walletAddress}
-          style={{
-            padding: '8px 16px',
-            background: '#2196F3',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: walletAddress ? 'pointer' : 'not-allowed',
-            opacity: walletAddress ? 1 : 0.7
-          }}
-        >
-          Copy Address
-        </button>
-      </div>
-
-      {/* Keypairs List */}
-      <div style={{ marginBottom: '20px' }}>
-        <h2>3. Saved Keypairs</h2>
+        <h2>2. Saved TON Wallet Address</h2>
+        <div style={{ marginBottom: '10px' }}>
+          <button 
+            onClick={handleGenerateKeypair}
+            style={{ 
+              padding: '10px 20px',
+              fontSize: '16px',
+              marginBottom: '10px',
+              background: '#4CAF50',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            Generate New Address
+          </button>
+        </div>
         {keypairs.map((keypair, index) => (
           <div key={index} style={{ 
             border: '1px solid #555',
@@ -203,23 +194,37 @@ function App() {
               alignItems: 'center',
               marginBottom: '10px'
             }}>
-              <div style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+              <div style={{ fontFamily: 'monospace', wordBreak: 'break-all', flex: 1 }}>
                 {keypair.address}
               </div>
-              <button
-                onClick={() => togglePassphrase(index)}
-                style={{ 
-                  padding: '8px 16px',
-                  background: '#607D8B',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  marginLeft: '10px'
-                }}
-              >
-                {showPassphraseIndex === index ? 'Hide' : 'Show'} Passphrase
-              </button>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={() => handleCopyAddress(keypair.address)}
+                  style={{ 
+                    padding: '8px 16px',
+                    background: '#2196F3',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Copy Address
+                </button>
+                <button
+                  onClick={() => togglePassphrase(index)}
+                  style={{ 
+                    padding: '8px 16px',
+                    background: '#607D8B',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {showPassphraseIndex === index ? 'Hide' : 'Show'} Passphrase
+                </button>
+              </div>
             </div>
             {showPassphraseIndex === index && (
               <div style={{ 
@@ -239,7 +244,7 @@ function App() {
 
       {/* Transfer Section */}
       <div style={{ marginBottom: '20px' }}>
-        <h2>4. Transfer from This Wallet</h2>
+        <h2>3. Transfer from This Wallet</h2>
         <div style={{ marginBottom: '15px' }}>
           <label style={{ display: 'block', marginBottom: '5px' }}>
             Recipient Address:
