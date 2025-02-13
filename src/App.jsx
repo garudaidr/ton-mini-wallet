@@ -15,6 +15,7 @@ function App() {
   const [showPassphraseIndex, setShowPassphraseIndex] = useState(null);
   const [balances, setBalances] = useState({});
   const [refreshingBalances, setRefreshingBalances] = useState(false);
+  const [addressToDelete, setAddressToDelete] = useState(null);
 
   // Transfer-related states
   const [toAddress, setToAddress] = useState('');
@@ -224,6 +225,24 @@ function App() {
     }
   };
 
+  // Handle delete address
+  const handleDeleteAddress = (address) => {
+    setAddressToDelete(address);
+  };
+
+  const confirmDelete = () => {
+    if (addressToDelete) {
+      const newKeypairs = keypairs.filter(kp => kp.address !== addressToDelete);
+      setKeypairs(newKeypairs);
+      localStorage.setItem('wallet_keypairs', JSON.stringify(newKeypairs));
+      setAddressToDelete(null);
+    }
+  };
+
+  const cancelDelete = () => {
+    setAddressToDelete(null);
+  };
+
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial', color: 'white', background: '#333' }}>
       <h1>Minimal TON Wallet</h1>
@@ -352,6 +371,20 @@ function App() {
                 >
                   {showPassphraseIndex === index ? 'Hide Passphrase' : 'Show Passphrase'}
                 </button>
+                <button
+                  onClick={() => handleDeleteAddress(keypair.address)}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '14px',
+                    background: '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Delete
+                </button>
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -367,6 +400,64 @@ function App() {
           </div>
         ))}
       </div>
+
+      {/* Confirmation Dialog */}
+      {addressToDelete && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: '#444',
+            padding: '20px',
+            borderRadius: '8px',
+            maxWidth: '400px',
+            width: '90%'
+          }}>
+            <h3 style={{ marginTop: 0 }}>Confirm Delete</h3>
+            <p>Are you sure you want to delete this address?</p>
+            <code style={{ display: 'block', marginBottom: '15px', wordBreak: 'break-all' }}>{addressToDelete}</code>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={cancelDelete}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '14px',
+                  background: '#666',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '14px',
+                  background: '#dc3545',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Transfer Section */}
       <div style={{ marginBottom: '20px' }}>
