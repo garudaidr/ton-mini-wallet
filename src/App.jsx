@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import TonWeb from 'tonweb';
-import * as bip39 from 'bip39';
 import { Buffer } from 'buffer/';
+import { mnemonicNew, mnemonicToWalletKey } from '@ton/crypto';
+import { WalletContractV4 } from '@ton/ton';
 
 // Make Buffer available globally
 globalThis.Buffer = Buffer;
@@ -23,44 +24,65 @@ function App() {
   const [amount, setAmount] = useState('');
   const [transferStatus, setTransferStatus] = useState('');
 
-  // Faucet-related state
-  const [faucetAddress, setFaucetAddress] = useState('');
-  const [faucetStatus, setFaucetStatus] = useState('');
+  useEffect(() => {
+    // Setup TonWeb instance (Testnet)
+    const tw = new TonWeb(
+      new TonWeb.HttpProvider('https://testnet.toncenter.com/api/v2/jsonRPC')
+    );
+    setTonweb(tw);
+  }, []);
 
-  // Initialize wallet from mnemonic
-  const initializeWallet = async (mnemonic) => {
+  // Convert address to user-friendly format
+  const toUserFriendly = (address, { bounceable, testOnly }) => {
+    return address.toString({
+      urlSafe: true,
+      bounceable,
+      testOnly,
+    });
+  };
+
+  // Initialize wallet from a mnemonic array (24 words is typical)
+  const initializeWallet = async (mnemonicArray) => {
     try {
-      const seed = await bip39.mnemonicToSeed(mnemonic);
-      const seedBytes = new Uint8Array(seed).slice(0, 32);
-      const derivedKeyPair = TonWeb.utils.keyPairFromSeed(seedBytes);
+      // Convert mnemonic to keypair
+      const key = await mnemonicToWalletKey(mnemonicArray);
+      const derivedKeyPair = {
+        publicKey: key.publicKey,
+        secretKey: key.secretKey,
+      };
       setKeyPair(derivedKeyPair);
 
-      const tw = new TonWeb(
-        new TonWeb.HttpProvider('https://testnet.toncenter.com/api/v2/jsonRPC')
-      );
-      setTonweb(tw);
-
-      const WalletClass = tw.wallet.all.v3R2;
-      const wallet = new WalletClass(tw.provider, {
+      // Create a V4 wallet contract
+      const wallet = WalletContractV4.create({
         publicKey: derivedKeyPair.publicKey,
-        wc: 0
+        workchain: 0,
       });
 
-      const address = await wallet.getAddress();
-      
+      // Get address in different formats
+      const address = wallet.address;
+      const testnetBounceable = toUserFriendly(address, {
+        bounceable: true,
+        testOnly: true,
+      });
+      const testnetNonBounceable = toUserFriendly(address, {
+        bounceable: false,
+        testOnly: true,
+      });
+
       return {
-        mnemonic,
-        address: address.toString(true, true, true),
+        mnemonic: mnemonicArray.join(" "),
+        address: testnetNonBounceable, // Using non-bounceable for safety
+        addressBounceable: testnetBounceable
       };
     } catch (error) {
-      console.error('Error initializing wallet:', error);
+      console.error("Error initializing wallet:", error);
       return null;
     }
   };
 
   // Get balance for a specific address
   const getBalance = async (address) => {
-    if (!tonweb) return;
+    if (!tonweb) return '0';
     try {
       const balance = await tonweb.getBalance(address);
       return TonWeb.utils.fromNano(balance);
@@ -73,7 +95,7 @@ function App() {
   // Refresh balances for all addresses
   const refreshBalances = async () => {
     if (!tonweb || refreshingBalances) return;
-    
+
     setRefreshingBalances(true);
     try {
       const newBalances = {};
@@ -98,9 +120,10 @@ function App() {
 
     const storedMnemonic = localStorage.getItem('wallet_mnemonic');
     if (storedMnemonic) {
+      // storedMnemonic is a single string of 12 or 24 words joined by spaces
+      const mnemonicArray = storedMnemonic.split(' ');
       setMnemonic(storedMnemonic);
-      initializeWallet(storedMnemonic).then(() => {
-        // Refresh balances after wallet is initialized
+      initializeWallet(mnemonicArray).then(() => {
         refreshBalances();
       });
     }
@@ -113,17 +136,27 @@ function App() {
     }
   }, [keypairs, tonweb]);
 
-  // Generate new keypair
+  // Generate new keypair using TON's official mnemonic
   const handleGenerateKeypair = async () => {
-    const generatedMnemonic = bip39.generateMnemonic();
-    const walletData = await initializeWallet(generatedMnemonic);
-    
-    if (walletData) {
-      const newKeypairs = [...keypairs, walletData];
-      setKeypairs(newKeypairs);
-      localStorage.setItem('wallet_keypairs', JSON.stringify(newKeypairs));
-      setMnemonic(generatedMnemonic);
-      localStorage.setItem('wallet_mnemonic', generatedMnemonic);
+    try {
+      // Typically 24 words is recommended by TON, but 12 also works
+      const generatedMnemonicArray = await mnemonicNew(24);
+
+      // Initialize wallet from that mnemonic array
+      const walletData = await initializeWallet(generatedMnemonicArray);
+
+      if (walletData) {
+        const newKeypairs = [...keypairs, walletData];
+        setKeypairs(newKeypairs);
+        localStorage.setItem('wallet_keypairs', JSON.stringify(newKeypairs));
+
+        // Store in localStorage as a single string
+        const mnemonicString = generatedMnemonicArray.join(' ');
+        setMnemonic(mnemonicString);
+        localStorage.setItem('wallet_mnemonic', mnemonicString);
+      }
+    } catch (error) {
+      console.error('Error generating keypair:', error);
     }
   };
 
@@ -155,15 +188,15 @@ function App() {
     try {
       setTransferStatus('Transferring... Please wait.');
 
-      // Initialize the wallet with the selected mnemonic
-      const seed = await bip39.mnemonicToSeed(selectedWallet.mnemonic);
-      const seedBytes = new Uint8Array(seed).slice(0, 32);
-      const selectedKeyPair = TonWeb.utils.keyPairFromSeed(seedBytes);
+      // Convert stored mnemonic to key
+      const mnemonicArray = selectedWallet.mnemonic.split(' ');
+      const key = await mnemonicToWalletKey(mnemonicArray);
 
-      const WalletClass = tonweb.wallet.all.v3R2;
+      // Create v4R2 wallet for the transfer
+      const WalletClass = tonweb.wallet.all.v4R2;
       const wallet = new WalletClass(tonweb.provider, {
-        publicKey: selectedKeyPair.publicKey,
-        wc: 0
+        publicKey: key.publicKey,
+        wc: 0,
       });
 
       const seqno = await wallet.methods.seqno().call();
@@ -171,57 +204,22 @@ function App() {
 
       await wallet.methods
         .transfer({
-          secretKey: selectedKeyPair.secretKey,
+          secretKey: key.secretKey,
           toAddress: toAddress,
           amount: nanoAmount,
           seqno: seqno,
           payload: 'Sent from minimal TON React wallet',
-          stateInit: null
+          stateInit: null,
         })
         .send();
 
       setTransferStatus(`Transfer successful! Sent ${amount} TON from ${fromAddress} to ${toAddress}`);
-      
+
       // Refresh balances after transfer
       setTimeout(refreshBalances, 5000);
     } catch (error) {
       console.error('Transfer error:', error);
       setTransferStatus('Transfer failed. Check console for details.');
-    }
-  };
-
-  // Request TON from faucet
-  const requestFaucet = async (e) => {
-    e.preventDefault();
-    if (!faucetAddress) {
-      alert('Please enter a wallet address.');
-      return;
-    }
-
-    setFaucetStatus('Requesting TON from faucet...');
-    try {
-      const response = await fetch('https://tonhubapi.com/faucet/api/v1/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ 
-          address: faucetAddress
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to request from faucet');
-      }
-
-      const data = await response.json();
-      setFaucetStatus('Successfully requested TON from faucet! It may take a few minutes to arrive.');
-      setFaucetAddress(''); // Clear the input after successful request
-    } catch (error) {
-      console.error('Faucet request error:', error);
-      setFaucetStatus(`Failed to request TON: ${error.message}`);
     }
   };
 
@@ -245,15 +243,15 @@ function App() {
 
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial', color: 'white', background: '#333' }}>
-      <h1>Minimal TON Wallet</h1>
+      <h1>Minimal TON Wallet (v4R2)</h1>
 
       {/* Mnemonic Display */}
       <div style={{ marginBottom: '20px' }}>
         <h2>1. Your Mnemonic (Seed Phrase)</h2>
         <div style={{ marginBottom: '10px' }}>
-          <button 
+          <button
             onClick={handleGenerateKeypair}
-            style={{ 
+            style={{
               padding: '10px 20px',
               fontSize: '16px',
               marginBottom: '10px',
@@ -277,7 +275,7 @@ function App() {
         </p>
       </div>
 
-      {/* Faucet Request Section */}
+      {/* Informational: Test Giver Bot */}
       <div style={{ marginBottom: '20px' }}>
         <h2>2. Request Test TON</h2>
         <p style={{ fontSize: '14px', marginBottom: '10px', color: '#4CAF50' }}>
@@ -288,11 +286,11 @@ function App() {
           <li>Start a chat with the bot</li>
           <li>Send your wallet address to receive test TON tokens</li>
         </ol>
-        <a 
-          href="https://t.me/testgiver_ton_bot" 
-          target="_blank" 
+        <a
+          href="https://t.me/testgiver_ton_bot"
+          target="_blank"
           rel="noopener noreferrer"
-          style={{ 
+          style={{
             display: 'inline-block',
             padding: '10px 20px',
             background: '#4CAF50',
@@ -305,14 +303,14 @@ function App() {
           Open Telegram Bot
         </a>
         <p style={{ fontSize: '12px', marginTop: '10px', color: '#aaa' }}>
-          Note: This is the official way to get testnet TON tokens. The bot may have rate limits and distribution rules.
+          Note: This is the official way to get testnet TON tokens.
         </p>
       </div>
 
       {/* Saved TON Wallet Addresses */}
       <div style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-          <h2>3. Saved TON Wallet Address</h2>
+          <h2>3. Saved TON Wallets</h2>
           <button
             onClick={refreshBalances}
             disabled={refreshingBalances}
@@ -424,7 +422,9 @@ function App() {
           }}>
             <h3 style={{ marginTop: 0 }}>Confirm Delete</h3>
             <p>Are you sure you want to delete this address?</p>
-            <code style={{ display: 'block', marginBottom: '15px', wordBreak: 'break-all' }}>{addressToDelete}</code>
+            <code style={{ display: 'block', marginBottom: '15px', wordBreak: 'break-all' }}>
+              {addressToDelete}
+            </code>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button
                 onClick={cancelDelete}
@@ -468,8 +468,8 @@ function App() {
             <select
               value={fromAddress}
               onChange={(e) => setFromAddress(e.target.value)}
-              style={{ 
-                width: '100%', 
+              style={{
+                width: '100%',
                 margin: '5px 0',
                 padding: '8px',
                 background: '#444',
@@ -494,8 +494,8 @@ function App() {
               type="text"
               value={toAddress}
               onChange={(e) => setToAddress(e.target.value)}
-              style={{ 
-                width: '100%', 
+              style={{
+                width: '100%',
                 margin: '5px 0',
                 padding: '8px',
                 background: '#444',
@@ -514,8 +514,8 @@ function App() {
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              style={{ 
-                width: '100%', 
+              style={{
+                width: '100%',
                 margin: '5px 0',
                 padding: '8px',
                 background: '#444',
@@ -527,7 +527,7 @@ function App() {
             />
           </label>
         </div>
-        <button 
+        <button
           onClick={handleTransfer}
           style={{
             padding: '10px 20px',
@@ -541,8 +541,8 @@ function App() {
           Send
         </button>
         {transferStatus && (
-          <p style={{ 
-            marginTop: '10px', 
+          <p style={{
+            marginTop: '10px',
             fontWeight: 'bold',
             color: transferStatus.includes('failed') ? '#ff6b6b' : '#4CAF50'
           }}>
