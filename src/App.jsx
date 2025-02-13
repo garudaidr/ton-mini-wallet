@@ -17,6 +17,7 @@ function App() {
   const [balances, setBalances] = useState({});
   const [refreshingBalances, setRefreshingBalances] = useState(false);
   const [addressToDelete, setAddressToDelete] = useState(null);
+  const [mnemonicInput, setMnemonicInput] = useState('');
 
   // Transfer-related states
   const [toAddress, setToAddress] = useState('');
@@ -241,6 +242,34 @@ function App() {
     setAddressToDelete(null);
   };
 
+  // Handle restore wallet from mnemonic
+  const handleRestoreWallet = async () => {
+    try {
+      // Convert mnemonic string to array
+      const mnemonicArray = mnemonicInput.trim().split(' ');
+      
+      // Check if we have exactly 24 words
+      if (mnemonicArray.length !== 24) {
+        alert('Please enter a valid 24-word mnemonic phrase');
+        return;
+      }
+
+      const walletData = await initializeWallet(mnemonicArray);
+      if (walletData) {
+        // Add to keypairs if not already exists
+        const exists = keypairs.some(kp => kp.address === walletData.address);
+        if (!exists) {
+          setKeypairs(prev => [...prev, walletData]);
+        } else {
+          alert('This wallet has already been added');
+        }
+      }
+    } catch (error) {
+      console.error('Error restoring wallet:', error);
+      alert('Error restoring wallet. Please check your mnemonic phrase.');
+    }
+  };
+
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial', color: 'white', background: '#333' }}>
       <h1>Minimal TON Wallet (v4R2)</h1>
@@ -263,6 +292,42 @@ function App() {
             }}
           >
             Generate
+          </button>
+        </div>
+
+        {/* Restore Wallet Section */}
+        <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+          <h3>Restore Wallet</h3>
+          <p style={{ fontSize: '14px', marginBottom: '10px' }}>
+            Enter your 24-word mnemonic phrase (separated by spaces):
+          </p>
+          <textarea
+            value={mnemonicInput}
+            onChange={(e) => setMnemonicInput(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px',
+              marginBottom: '10px',
+              borderRadius: '4px',
+              border: '1px solid #ccc',
+              minHeight: '100px'
+            }}
+            placeholder="Enter your 24-word mnemonic phrase here..."
+          />
+          <button
+            onClick={handleRestoreWallet}
+            style={{
+              padding: '10px 20px',
+              fontSize: '16px',
+              marginBottom: '10px',
+              background: '#2196F3',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            Restore Wallet
           </button>
         </div>
       </div>
@@ -523,6 +588,8 @@ function App() {
           onClick={handleTransfer}
           style={{
             padding: '10px 20px',
+            fontSize: '16px',
+            marginBottom: '10px',
             background: '#4CAF50',
             color: 'white',
             border: 'none',
