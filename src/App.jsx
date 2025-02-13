@@ -265,14 +265,6 @@ function App() {
             Generate
           </button>
         </div>
-        {mnemonic && (
-          <p style={{ background: '#444', padding: '8px', borderRadius: '4px' }}>
-            {mnemonic}
-          </p>
-        )}
-        <p style={{ fontSize: '14px', color: '#ff6b6b' }}>
-          ** Store this somewhere safe! In a real app, do NOT show it in plain text. **
-        </p>
       </div>
 
       {/* Informational: Test Giver Bot */}
