@@ -86,12 +86,26 @@ function App() {
     if (!tonweb) return '0';
     try {
       const balance = await tonweb.getBalance(address);
+      // Check if balance is a valid number
+      if (typeof balance === 'string' && balance.toLowerCase().includes('ratelimit')) {
+        throw new Error('Rate limit exceeded. Please try again in a few seconds.');
+      }
+      if (balance === null || balance === undefined || isNaN(balance)) {
+        throw new Error('Invalid balance received');
+      }
       return TonWeb.utils.fromNano(balance);
     } catch (error) {
-      console.error('Error getting balance:', error);
+      console.error('Error getting balance:', error.message);
+      // If it's a rate limit error, we might want to show a different message to the user
+      if (error.message.toLowerCase().includes('ratelimit')) {
+        throw new Error('Rate limit exceeded. Please try again in a few seconds.');
+      }
       return '0';
     }
   };
+
+  // Add delay helper function
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   // Refresh balances for all addresses
   const refreshBalances = async () => {
@@ -102,6 +116,8 @@ function App() {
       const newBalances = {};
       for (const keypair of keypairs) {
         newBalances[keypair.address] = await getBalance(keypair.address);
+        // Add 1 second delay between each balance check
+        await delay(1000);
       }
       setBalances(newBalances);
     } catch (error) {
