@@ -259,7 +259,9 @@ function App() {
         // Add to keypairs if not already exists
         const exists = keypairs.some(kp => kp.address === walletData.address);
         if (!exists) {
-          setKeypairs(prev => [...prev, walletData]);
+          const newKeypairs = [...keypairs, walletData];
+          setKeypairs(newKeypairs);
+          localStorage.setItem('wallet_keypairs', JSON.stringify(newKeypairs));
         } else {
           alert('This wallet has already been added');
         }
