@@ -200,28 +200,77 @@ function App() {
         wc: 0,
       });
 
-      const seqno = await wallet.methods.seqno().call();
-      const nanoAmount = TonWeb.utils.toNano(amount.toString());
+      try {
+        // Get wallet address and ensure it's properly formatted
+        const walletAddress = await wallet.getAddress();
+        const formattedWalletAddress = walletAddress.toString(true, true, true);
+        console.log('Wallet address:', formattedWalletAddress);
 
-      await wallet.methods
-        .transfer({
+        // Validate destination address
+        try {
+          const destinationAddress = new TonWeb.utils.Address(toAddress);
+          console.log('Destination address:', destinationAddress.toString(true, true, true));
+        } catch (error) {
+          throw new Error(`Invalid destination address: ${error.message}`);
+        }
+
+        let seqno = 0;
+        try {
+          // Try to get seqno, default to 0 if fails
+          const seqnoResult = await wallet.methods.seqno().call();
+          if (seqnoResult !== null && seqnoResult !== undefined) {
+            seqno = seqnoResult;
+          }
+          console.log('Current seqno:', seqno);
+        } catch (error) {
+          console.log('Error getting seqno, using 0:', error.message);
+        }
+
+        const nanoAmount = TonWeb.utils.toNano(amount.toString());
+        console.log('Transfer amount in nano:', nanoAmount.toString());
+
+        // Prepare transfer parameters
+        const transferParams = {
           secretKey: key.secretKey,
           toAddress: toAddress,
           amount: nanoAmount,
           seqno: seqno,
           payload: 'Sent from minimal TON React wallet',
-          stateInit: null,
-        })
-        .send();
+          stateInit: null // We'll let the wallet handle deployment automatically
+        };
 
-      setTransferStatus(`Transfer successful! Sent ${amount} TON from ${fromAddress} to ${toAddress}`);
+        console.log('Attempting transfer with params:', {
+          ...transferParams,
+          secretKey: '[hidden]',
+          amount: transferParams.amount.toString()
+        });
 
-      // Refresh balances after transfer
-      setTimeout(refreshBalances, 5000);
+        await wallet.methods
+          .transfer(transferParams)
+          .send();
+
+        setTransferStatus(`Transfer successful! Sent ${amount} TON to ${toAddress}`);
+      } catch (error) {
+        console.error('Transfer error details:', error);
+        
+        // Provide more specific error messages
+        let errorMessage = error.message;
+        if (error.message.includes('416')) {
+          errorMessage = 'Error connecting to TON network. Please try again.';
+        } else if (error.message.includes('address')) {
+          errorMessage = 'Invalid wallet address. Please check the destination address.';
+        }
+        
+        setTransferStatus(`Transfer failed: ${errorMessage}`);
+        throw error;
+      }
     } catch (error) {
       console.error('Transfer error:', error);
       setTransferStatus('Transfer failed. Check console for details.');
     }
+
+    // Refresh balances after transfer
+    setTimeout(refreshBalances, 5000);
   };
 
   // Handle delete address
